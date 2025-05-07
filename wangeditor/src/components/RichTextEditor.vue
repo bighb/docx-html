@@ -15,24 +15,25 @@
       <button class="action-button" @click="exportWord">导出为Word</button>
     </div>
 
-    <div style="border: 1px solid #ccc">
+    <div class="editor-wrapper">
       <Toolbar
         style="border-bottom: 1px solid #ccc"
         :editor="editorRef"
         :defaultConfig="toolbarConfig"
         :mode="mode"
       />
-      <Editor
-        style="height: 500px; overflow-y: hidden"
-        v-model="valueHtml"
-        :defaultConfig="editorConfig"
-        :mode="mode"
-        @onCreated="handleCreated"
-      />
+      <div class="a4-container">
+        <Editor
+          class="a4-editor"
+          v-model="valueHtml"
+          :defaultConfig="editorConfig"
+          :mode="mode"
+          @onCreated="handleCreated"
+        />
+      </div>
     </div>
   </div>
 </template>
-
 <script setup>
 import "@wangeditor/editor/dist/css/style.css"; // 引入 css
 import { onBeforeUnmount, ref, shallowRef, onMounted } from "vue";
@@ -146,19 +147,76 @@ Boot.registerMenu({
     };
   },
 });
-const toolbarConfig = {};
+// 将空对象修改为包含配置的对象
+const toolbarConfig = {
+  // 排除特定的菜单项
+  toolbarKeys: [
+    "insertPlaceholder", // 自定义的插入占位符菜单
+    "bold",
+    "underline",
+    "italic",
+    "through",
+    "clearStyle",
+    "fontSize",
+    "fontFamily",
+    "indent",
+    "delIndent",
+    "justifyLeft",
+    "justifyRight",
+    "justifyCenter",
+    "justifyJustify",
+    "lineHeight",
+    "divider",
+    "blockquote",
+    "headerSelect",
+    "header1",
+    "header2",
+    "header3",
+    "header4",
+    "header5",
+    "bulletedList",
+    "numberedList",
+    "insertTable",
+    "deleteTable",
+    "insertTableRow",
+    "deleteTableRow",
+    "insertTableCol",
+    "deleteTableCol",
+    "tableHeader",
+    "tableFullWidth",
+    "redo",
+    "undo",
+  ],
+};
 
-const editorConfig = { placeholder: "请输入内容..." };
+// 使用官方推荐的方式在 editorConfig 中配置 fontSize
+const editorConfig = {
+  placeholder: "请输入内容...",
+  // 使用 MENU_CONF 配置各个菜单
+  MENU_CONF: {
+    // 配置 fontSize 菜单
+    fontSize: {
+      // 自定义配置字体大小
+      fontSizeList: [...Array.from({ length: 45 }, (_, i) => `${i + 12}px`)],
+    },
+  },
+  hoverbarKeys: {
+    // 文本选择时的悬浮菜单
+    text: {
+      menuKeys: ["bold", "italic", "underline", "through", "clearStyle"],
+    },
+  },
+};
 const mode = "default"; // 或 'simple'
 
 // 触发文件选择
 const triggerFileInput = () => {
   fileInput.value.click();
 };
-toolbarConfig.insertKeys = {
-  index: 0, // 插入的位置，基于当前的 toolbarKeys
-  keys: ["insertPlaceholder"],
-};
+// toolbarConfig.insertKeys = {
+//   index: 0, // 插入的位置，基于当前的 toolbarKeys
+//   keys: ["insertPlaceholder"],
+// };
 
 // 处理Word文档导入
 const handleUpload = async (e) => {
@@ -241,13 +299,48 @@ const handleCreated = (editor) => {
   editorRef.value = editor; // 记录 editor 实例，重要！
   // 打印所有可用的菜单键
   console.log("所有可用的菜单键:", editor.getAllMenuKeys());
+  console.log("悬浮菜单:", editor.getConfig().hoverbarKeys); // 如果有此属性
 };
 </script>
 
 <style scoped>
-.editor-container {
-  max-width: 800px;
+/* 编辑器包装容器 */
+.editor-wrapper {
+  border: 1px solid #ccc;
   margin: 0 auto;
+}
+
+/* A4纸容器 */
+.a4-container {
+  display: flex;
+  justify-content: center;
+  background-color: #f0f0f0;
+  padding: 20px;
+  min-height: 90vh;
+  overflow-y: auto;
+}
+
+/* A4纸样式 */
+:deep(.a4-editor) {
+  width: 210mm; /* A4宽度 */
+  min-height: 297mm; /* A4高度 */
+  padding: 20mm; /* 页边距 */
+  background-color: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  overflow-y: visible;
+}
+
+/* 确保编辑区域有正确的尺寸 */
+:deep(.a4-editor .w-e-text-container) {
+  width: 170mm !important; /* A4宽度减去页边距 */
+  height: auto !important;
+  overflow: visible !important;
+  margin: 0 auto;
+}
+
+/* 调整工具栏宽度 */
+:deep(.w-e-toolbar) {
+  flex-wrap: wrap;
 }
 
 .document-actions {
