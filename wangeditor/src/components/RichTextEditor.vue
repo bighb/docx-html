@@ -227,7 +227,7 @@ const handleUpload = async (e) => {
   formData.append("file", file);
 
   try {
-    const res = await fetch("http://localhost:3000/upload-word", {
+    const res = await fetch("http://10.3.74.131:3000/upload-word", {
       method: "POST",
       body: formData,
     });
@@ -267,7 +267,7 @@ const exportWord = async () => {
   const html = editorRef.value.getHtml();
 
   try {
-    const res = await fetch("http://localhost:3000/export-word", {
+    const res = await fetch("http://10.3.74.131:3000/export-word", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -82,7 +82,7 @@ const handleUpload = async (e) => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch("http://localhost:3000/upload-word", {
+  const res = await fetch("http://10.3.74.131:3000/upload-word", {
     method: "POST",
     body: formData,
   });
@@ -134,7 +134,7 @@ const extractBodyContent = (htmlString) => {
 const exportWord = async () => {
   const html = quill.root.innerHTML;
 
-  const res = await fetch("http://localhost:3000/export-word", {
+  const res = await fetch("http://10.3.74.131:3000/export-word", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
