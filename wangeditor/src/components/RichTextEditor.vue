@@ -222,7 +222,7 @@ Boot.registerMenu({
 
             // 点击占位符项时插入内容
             option.onclick = () => {
-              editor.insertText(`{{${item.value}}}`);
+              editor.insertText(`{{${item.text}${item.value}}}`);
               // 不需要手动关闭面板，编辑器会自动处理
             };
 
@@ -301,10 +301,6 @@ const mode = "default"; // 或 'simple'
 const triggerFileInput = () => {
   fileInput.value.click();
 };
-// toolbarConfig.insertKeys = {
-//   index: 0, // 插入的位置，基于当前的 toolbarKeys
-//   keys: ["insertPlaceholder"],
-// };
 
 // 处理Word文档导入
 const handleUpload = async (e) => {
