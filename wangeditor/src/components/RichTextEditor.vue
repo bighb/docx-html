@@ -77,6 +77,8 @@ const valueHtml = ref("");
 // 添加标题数组
 const headings = ref([]);
 
+// 创建一个标记变量，标识是否是从大纲更新而来的变化
+const isUpdatingFromOutline = ref(false);
 // 在组件挂载时获取占位符数据
 onMounted(() => {
   // 模拟 ajax 异步获取内容
@@ -97,21 +99,43 @@ onMounted(() => {
 // 添加编辑器内容变化时的处理函数
 const handleChange = (editor) => {
   const html = editor.getHtml();
-  console.log("修改了目录");
   // 添加一个标记来防止循环调用
-  if (isUpdatingFromOutline) return;
-  console.log("修改了目录updateOutlineDebounced");
-  // 使用防抖函数延迟更新大纲
-  updateOutlineDebounced(html);
+  if (isUpdatingFromOutline.value) return;
+  // 只提取标题信息，不再修改HTML添加ID
+  extractOutline(html);
 };
+// 新增：只提取大纲信息，不修改HTML
+const extractOutline = debounce((html) => {
+  if (!html) return;
 
-// 创建一个标记变量，标识是否是从大纲更新而来的变化
-const isUpdatingFromOutline = ref(false);
+  // 使用parseHeadings但只获取headingsData
+  const { headingsData } = parseHeadings(html);
 
-// 使用防抖优化更新操作
-const updateOutlineDebounced = debounce((html) => {
-  updateOutline(html);
-}, 300);
+  // 更新目录数据
+  headings.value = headingsData;
+}, 500);
+
+// 修改原有的updateOutline函数，仅在加载文档时使用
+const updateOutlineWithIds = (html) => {
+  if (!html) return;
+
+  const { headingsData, htmlWithIds } = parseHeadings(html);
+  headings.value = headingsData;
+
+  // 只在初始加载或特定情况下才修改HTML
+  if (htmlWithIds !== html && editorRef.value) {
+    console.log("锁定");
+    isUpdatingFromOutline.value = true;
+
+    editorRef.value.setHtml(htmlWithIds);
+
+    // 使用更长的延时确保处理完成
+    setTimeout(() => {
+      console.log("解锁");
+      isUpdatingFromOutline.value = false;
+    }, 500); // 增加到500ms
+  }
+};
 
 // 引入防抖函数
 function debounce(fn, delay) {
@@ -123,28 +147,6 @@ function debounce(fn, delay) {
     }, delay);
   };
 }
-
-// 更新文档大纲
-const updateOutline = (html) => {
-  if (!html) return;
-
-  const { headingsData, htmlWithIds } = parseHeadings(html);
-  headings.value = headingsData;
-
-  // 如果解析后的HTML与原HTML不同（添加了ID），则更新编辑器内容
-  if (htmlWithIds !== html && editorRef.value) {
-    // 设置标记，表示正在从大纲更新内容
-    isUpdatingFromOutline.value = true;
-
-    // 更新编辑器内容
-    editorRef.value.setHtml(htmlWithIds);
-
-    // 恢复标记
-    setTimeout(() => {
-      isUpdatingFromOutline.value = false;
-    }, 10);
-  }
-};
 
 // 跳转到指定标题
 const jumpToHeading = (heading) => {
@@ -337,7 +339,7 @@ const handleUpload = async (e) => {
       editorRef.value.setHtml(html);
 
       // 解析标题并更新目录
-      updateOutline(html);
+      updateOutlineWithIds(html);
     }
   } catch (error) {
     console.error("导入Word文档失败:", error);
