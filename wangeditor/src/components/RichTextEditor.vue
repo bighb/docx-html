@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="editor-container">
     <!-- 添加导入导出按钮 -->
     <div class="document-actions">
       <input
@@ -15,21 +15,43 @@
       <button class="action-button" @click="exportWord">导出为Word</button>
     </div>
 
-    <div class="editor-wrapper">
-      <Toolbar
-        style="border-bottom: 1px solid #ccc"
-        :editor="editorRef"
-        :defaultConfig="toolbarConfig"
-        :mode="mode"
-      />
-      <div class="a4-container">
-        <Editor
-          class="a4-editor"
-          v-model="valueHtml"
-          :defaultConfig="editorConfig"
+    <div class="main-content">
+      <!-- 添加目录侧边栏 -->
+      <div class="outline-sidebar" v-if="headings.length > 0">
+        <h3>文档目录</h3>
+        <ul class="outline-list">
+          <li
+            v-for="heading in headings"
+            :key="heading.id"
+            :class="{
+              'heading-h1': heading.level === 'h1',
+              'heading-h2': heading.level === 'h2',
+            }"
+            :style="{ paddingLeft: `${heading.indent}px` }"
+            @click="jumpToHeading(heading)"
+          >
+            {{ heading.text }}
+          </li>
+        </ul>
+      </div>
+
+      <div class="editor-wrapper">
+        <Toolbar
+          style="border-bottom: 1px solid #ccc"
+          :editor="editorRef"
+          :defaultConfig="toolbarConfig"
           :mode="mode"
-          @onCreated="handleCreated"
         />
+        <div class="a4-container">
+          <Editor
+            class="a4-editor"
+            v-model="valueHtml"
+            :defaultConfig="editorConfig"
+            :mode="mode"
+            @onCreated="handleCreated"
+            @onChange="handleChange"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -41,6 +63,8 @@ import { Editor, Toolbar } from "@wangeditor/editor-for-vue";
 import { Boot } from "@wangeditor/editor";
 // 引入当前 svg 文件
 import { svgIcon } from "./insert-placeholder.js";
+// 引入HTML标题解析工具
+import { parseHeadings, scrollToHeading } from "../utils/htmlTitleParser.js";
 
 // 编辑器实例，必须用 shallowRef
 const editorRef = shallowRef();
@@ -49,13 +73,14 @@ const fileInput = ref(null);
 // 创建一个全局的占位符列表引用
 const globalPlaceholderList = ref([]);
 // 内容 HTML
-const valueHtml = ref("<p>hello</p>");
+const valueHtml = ref("");
+// 添加标题数组
+const headings = ref([]);
+
 // 在组件挂载时获取占位符数据
 onMounted(() => {
   // 模拟 ajax 异步获取内容
   setTimeout(() => {
-    valueHtml.value = "<p>请开始编辑或导入Word文档</p>";
-
     // 同时获取占位符列表数据
     // 实际应用中可以使用 fetch 或 axios 从服务器获取
     globalPlaceholderList.value = [
@@ -68,6 +93,67 @@ onMounted(() => {
     ];
   }, 500);
 });
+
+// 添加编辑器内容变化时的处理函数
+const handleChange = (editor) => {
+  const html = editor.getHtml();
+  console.log("修改了目录");
+  // 添加一个标记来防止循环调用
+  if (isUpdatingFromOutline) return;
+  console.log("修改了目录updateOutlineDebounced");
+  // 使用防抖函数延迟更新大纲
+  updateOutlineDebounced(html);
+};
+
+// 创建一个标记变量，标识是否是从大纲更新而来的变化
+const isUpdatingFromOutline = ref(false);
+
+// 使用防抖优化更新操作
+const updateOutlineDebounced = debounce((html) => {
+  updateOutline(html);
+}, 300);
+
+// 引入防抖函数
+function debounce(fn, delay) {
+  let timer = null;
+  return function (...args) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+    }, delay);
+  };
+}
+
+// 更新文档大纲
+const updateOutline = (html) => {
+  if (!html) return;
+
+  const { headingsData, htmlWithIds } = parseHeadings(html);
+  headings.value = headingsData;
+
+  // 如果解析后的HTML与原HTML不同（添加了ID），则更新编辑器内容
+  if (htmlWithIds !== html && editorRef.value) {
+    // 设置标记，表示正在从大纲更新内容
+    isUpdatingFromOutline.value = true;
+
+    // 更新编辑器内容
+    editorRef.value.setHtml(htmlWithIds);
+
+    // 恢复标记
+    setTimeout(() => {
+      isUpdatingFromOutline.value = false;
+    }, 10);
+  }
+};
+
+// 跳转到指定标题
+const jumpToHeading = (heading) => {
+  if (!heading || !heading.id) return;
+
+  // 传递标题ID和标题文本内容
+  scrollToHeading(heading.id, heading.text);
+};
+
 // 注册自定义菜单 - 插入占位符
 Boot.registerMenu({
   key: "insertPlaceholder",
@@ -249,6 +335,9 @@ const handleUpload = async (e) => {
     // 如果需要直接操作编辑器实例
     if (editorRef.value) {
       editorRef.value.setHtml(html);
+
+      // 解析标题并更新目录
+      updateOutline(html);
     }
   } catch (error) {
     console.error("导入Word文档失败:", error);
@@ -295,6 +384,13 @@ onBeforeUnmount(() => {
   editor.destroy();
 });
 
+// 触发时机：编辑器实例创建完成后触发，整个生命周期内只触发一次
+// 参数传递：向事件处理函数传递编辑器实例对象
+// 主要用途：
+// 获取并存储编辑器实例引用
+// 执行初始化操作
+// 设置编辑器配置
+// 加载初始内容
 const handleCreated = (editor) => {
   editorRef.value = editor; // 记录 editor 实例，重要！
   // 打印所有可用的菜单键
@@ -304,19 +400,82 @@ const handleCreated = (editor) => {
 </script>
 
 <style scoped>
+/* 编辑器容器布局 */
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 主内容区域布局 */
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 90vh;
+}
+
+/* 目录侧边栏样式 */
+.outline-sidebar {
+  width: 240px;
+  padding: 16px;
+  background: #f8f8f8;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  max-height: 90vh;
+}
+
+.outline-sidebar h3 {
+  font-size: 16px;
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.outline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.outline-list li {
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s;
+}
+
+.outline-list li:hover {
+  color: #4a89dc;
+}
+
+.heading-h1 {
+  font-weight: bold;
+}
+
+.heading-h2 {
+  font-weight: normal;
+  color: #666;
+}
+
 /* 编辑器包装容器 */
 .editor-wrapper {
+  flex: 1;
   border: 1px solid #ccc;
   margin: 0 auto;
 }
 
+/* 保留原有样式 */
 /* A4纸容器 */
 .a4-container {
+  height: calc(100vh - 60px - 125px); /* 减去工具栏高度 */
   display: flex;
   justify-content: center;
   background-color: #f0f0f0;
   padding: 20px;
-  min-height: 90vh;
   overflow-y: auto;
 }
 
@@ -328,13 +487,14 @@ const handleCreated = (editor) => {
   background-color: white;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   overflow-y: visible;
+  height: fit-content !important;
 }
 
 /* 确保编辑区域有正确的尺寸 */
 :deep(.a4-editor .w-e-text-container) {
   width: 170mm !important; /* A4宽度减去页边距 */
   height: auto !important;
-  overflow: visible !important;
+  /* overflow: visible !important; */
   margin: 0 auto;
 }
 
